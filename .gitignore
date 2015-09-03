@@ -12,5 +12,5 @@
 vignettes/*.html
 vignettes/*.pdf
 
-# Privatr directories
+# Private directories
 private/*
