@@ -1,0 +1,9 @@
+The development version of the R script is found in word_count.
+The development version of the BUILD script is found in word_count/bash
+These files can be committed as they do not contain sensitive information.
+
+To build the R script with the proper database credentials
+cd into the private/bash directory and execute ./build_word_cloud.sh
+The executable R file will be found in private/word_count
+These files MUST NOT be committed to git.
+.gitignore is set up to avoid this.
