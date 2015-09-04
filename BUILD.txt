@@ -1,3 +1,21 @@
+Build Instructions
+------------------
+
+Introduction
+------------
+
+This document explains how to build R scripts so they can be executed.
+The "build" process is needed as some of the R scripts embed sensitive information
+such as authentication information and API keys that should not be committed to GitHub.
+Basically in a "build" sed is used to substitute the private information into placeholders
+within the publicly visible R scripts.
+
+The executable files in private/ MUST NOT be committed to git.
+.gitignore is set up to avoid this.
+
+Subject-line Sentiment
+----------------------
+ 
 The development version of the R script is found in word_count.
 The development version of the BUILD script is found in word_count/bash
 These files can be committed as they do not contain sensitive information.
@@ -5,5 +23,14 @@ These files can be committed as they do not contain sensitive information.
 To build the R script with the proper database credentials
 cd into the private/bash directory and execute ./build_word_cloud.sh
 The executable R file will be found in private/word_count
-These files MUST NOT be committed to git.
-.gitignore is set up to avoid this.
+
+Cluster Analysis
+----------------------
+ 
+The development version of the R script is found in clustering.
+The development version of the BUILD script is found in clustering/bash
+These files can be committed as they do not contain sensitive information.
+
+To build the R script with the proper database credentials
+cd into the private/bash directory and execute ./build_clustering.sh
+The executable R file will be found in private/clustering

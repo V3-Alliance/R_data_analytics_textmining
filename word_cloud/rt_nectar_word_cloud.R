@@ -1,14 +1,17 @@
 # Explore the Request Tracker (RT) Database.
 # Version 4.0 of the RT web application is used.
 
+# This script performs sentiment analysis on the email subject-line
+# and uses that to colour-code a word cloud.
+
 library(RMySQL)
-# library(qdap)
 library(RCurl)
 library(RJSONIO)
 library(stringr)
 library(tm)
 library(wordcloud)
 
+# Key used by public sentiment analysis web service.
 db_key = '%db_key%'
 
 # -----------------------------------------
