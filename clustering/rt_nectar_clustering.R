@@ -8,11 +8,26 @@ library(RMySQL)
 library(stringr)
 library(tm)
 library(XML)
+library(foreach)
+library(doMC)
+library(ggplot2)
+library(bigmemory)
+library(biganalytics)
 
 library(RTextTools)
 
 # -----------------------------------------
+# Define some constants
+
+project_storage_path <- "/Users/developer/git/R_data_analytics_textmining"
+input_folder_path <- paste(project_storage_path, "big_matrices", sep = "/")
+output_folder_path <- paste(project_storage_path, "big_matrices", sep = "/")
+
+# -----------------------------------------
 # Define some functions
+
+# An empty function for Comments
+Comment <- function(`@Comments`) {invisible()}
 
 clean.text <- function(some_txt)
 {
@@ -201,30 +216,136 @@ for (message_index in 1:message_count) {
 	messages[message_index] <- message
 }
 
-messages = removeWords(messages, stopwords("english"))
-# Assemble the vector of texts into a corpus of documents.
-corpus = Corpus(VectorSource(messages))
-
-
 # Create document-term matrix, passing data cleaning options
 # Stem the words to avoid multiples of similar words
 # Need to set wordLength to minimum of 1 because "r" a likely term
-dtm <- create_matrix(messages, 
+document_term_matrix <- create_matrix(messages, 
                      stemWords=TRUE, 
-                     removeStopwords=FALSE, 
+                     removeStopwords=TRUE, 
                      minWordLength=1,
                      removePunctuation= TRUE)
 
+# Check the results
+# findFreqTerms(dtm, lowfreq=2000)
+
+# Apply kmeans
+# kmeans5 <- kmeans(document_term_matrix, 5)
+
+# Merge cluster assignment back to keywords
+#messages_with_cluster <- as.data.frame(cbind(messages, kmeans5$cluster))
+#names(messages_with_cluster) <- c("message", "kmeans5")
+
+# Make df for each cluster result, quickly "eyeball" results
+#cluster1 <- subset(messages_with_cluster, subset=kmeans5 == 1)
+#cluster2 <- subset(messages_with_cluster, subset=kmeans5 == 2)
+#cluster3 <- subset(messages_with_cluster, subset=kmeans5 == 3)
+#cluster4 <- subset(messages_with_cluster, subset=kmeans5 == 4)
+#cluster5 <- subset(messages_with_cluster, subset=kmeans5 == 5)
+
+# Using multi-core
+# Run kmeans for all clusters up to 100
+# Limited to 1 as otherwise 16Gig of compressed memory is not enough when using kmeans.
+registerDoMC(2)
+
+# Benchmark start time.
+start_time <- Sys.time()
+
+cluster_size_count <- 6
+
+# Use big.matrix otherwise memory consumption ends up proportional
+# to each core used.
+big.dtm <- as.big.matrix(as.matrix(document_term_matrix), type = "double", separated = FALSE,
+      backingfile = "big.dtm.matrix", backingpath = output_folder_path, descriptorfile = "big.dtm.desc",
+      binarydescriptor=FALSE, shared=TRUE)
+
+# Need to set working directory as there seems to be a bug in the attach.resource code
+# where the directory path gets lost and instead is set to '.'.
+setwd(output_folder_path) 
+      
+costs <- foreach(cluster_size_index = 1:cluster_size_count, .combine=rbind, .packages=c('doMC')) %dopar% {
+    cat("\nCluster: ", cluster_size_index)
+	# Use bigkmeans instead of kmeans,
+	# otherwise memory consumption ends up around 20-30Gig and the computer dies.
+	kmeans <- bigkmeans(x=big.dtm, centers=cluster_size_index, iter.max=100)
+	cbind(cluster_size_index, sum(kmeans$withinss)) # For the inbuilt kmeans would be kmeans$tot.withinss
+}
+
+# Benchmark stop time and record duration.
+duration = difftime(Sys.time(), start_time, units = "secs")
+cat("\nMulti-core kmeans duration/sec: ", duration, "\n")
+# -----------------------------------------
+# Exploring/benchmarking kmeans calls with different matrix implementations.
+
+Comment( `
+
+# Benchmark stop time and record duration.
+duration = difftime(Sys.time(), start_time, units = "secs")
+cat("\nMulti-core kmeans duration/sec: ", duration, "\n")
+
+# Benchmark start time.
+start_time <- Sys.time()
+km <- kmeans(x=dtm, centers=1, iter.max=100)
+# Benchmark stop time and record duration.
+duration = difftime(Sys.time(), start_time, units = "secs")
+cat("\nkmeans duration/sec: ", duration, "\n")
+
+# Benchmark start time.
+start_time <- Sys.time()
+big <- bigkmeans(x=dtm, centers=1, iter.max=100)
+# Benchmark stop time and record duration.
+duration = difftime(Sys.time(), start_time, units = "secs")
+cat("\bigkmeans duration/sec: ", duration, "\n")
+
+# Benchmark start time.
+start_time <- Sys.time()
+really_big <- bigkmeans(x=big.dtm, centers=1, iter.max=100)
+# Benchmark stop time and record duration.
+duration = difftime(Sys.time(), start_time, units = "secs")
+cat("\nbig.matrix bigkmeans duration/sec: ", duration, "\n")
+
+`)
+# -----------------------------------------
+# Plotting output of kmeans as a function of cluster size.
+
+cost_df <-data.frame(costs)
+names(cost_df) <- c("cluster", "cost")
+
+#Calculate lm's for emphasis
+#lm(cost_df$cost[1:10] ~ cost_df$cluster[1:10])
+#lm(cost_df$cost[10:19] ~ cost_df$cluster[10:19])
+#lm(cost_df$cost[20:100] ~ cost_df$cluster[20:100])
+
+#cost_df$fitted <- ifelse(cost_df$cluster <10, (19019.9 - 550.9*cost_df$cluster), 
+#                         ifelse(cost_df$cluster <20, (15251.5 - 116.5*cost_df$cluster),
+#                         (13246.1 - 35.9*cost_df$cluster)))
+
+#Cost plot
+ggplot(data=cost_df, aes(x=cluster, y=cost, group=1)) + 
+	theme_bw(base_family="Garamond") + 
+	geom_line(colour = "darkgreen") +
+	theme(text = element_text(size=20)) +
+	ggtitle("Reduction In Cost For Values of 'k'\n") +
+	xlab("\nClusters") + 
+	ylab("Within-Cluster Sum of Squares\n") +
+	scale_x_continuous(breaks=seq(from=0, to=6, by= 1))
+#geom_line(aes(y= fitted), linetype=2)
 
 # -----------------------------------------
+# Word cloud for message text.
 
-# Assemble the vector of texts into a corpus of documents
-# and attach the sentiment labels to the term-document-matrix as column names.
-corpus = Corpus(VectorSource(sentiment_docs))
+# Assemble the vector of texts into a corpus of documents.
+
+Comment( `
+messages = removeWords(messages, stopwords("english"))
+corpus = Corpus(VectorSource(messages))
 tdm = TermDocumentMatrix(corpus)
 tdm = as.matrix(tdm)
-colnames(tdm) = labels
 
 # Comparison word cloud
 # This fails with the error message that the colour range for the palette should be 8 max.
 comparison.cloud(tdm, scale = c(3,.5), random.order = FALSE, title.size = 1.5)
+`)
+
+
+# Clear out the workspace.
+#rm(list = ls())
