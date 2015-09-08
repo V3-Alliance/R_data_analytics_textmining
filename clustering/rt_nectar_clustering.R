@@ -271,6 +271,7 @@ costs <- foreach(cluster_size_index = 1:cluster_size_count, .combine=rbind, .pac
 }
 
 # Benchmark stop time and record duration.
+# With 2 cores and 6 clusters max takes about 80min.
 duration = difftime(Sys.time(), start_time, units = "secs")
 cat("\nMulti-core kmeans duration/sec: ", duration, "\n")
 # -----------------------------------------
